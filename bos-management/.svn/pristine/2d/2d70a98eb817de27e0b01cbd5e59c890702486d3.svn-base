@@ -1,0 +1,168 @@
+package com.itheima.bos.web.action.base;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import javax.persistence.criteria.CriteriaBuilder;
+import javax.persistence.criteria.CriteriaQuery;
+import javax.persistence.criteria.Join;
+import javax.persistence.criteria.Predicate;
+import javax.persistence.criteria.Root;
+import javax.ws.rs.core.MediaType;
+
+import org.apache.commons.lang.StringUtils;
+import org.apache.cxf.jaxrs.client.WebClient;
+import org.apache.shiro.authz.annotation.RequiresPermissions;
+import org.apache.struts2.convention.annotation.Action;
+import org.apache.struts2.convention.annotation.Namespace;
+import org.apache.struts2.convention.annotation.ParentPackage;
+import org.apache.struts2.convention.annotation.Result;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Scope;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
+import org.springframework.stereotype.Controller;
+
+import com.itheima.bos.domain.base.Area;
+import com.itheima.bos.domain.base.AreaSub;
+import com.itheima.bos.domain.base.SubArea;
+import com.itheima.bos.service.base.SubareaService;
+import com.itheima.bos.web.action.CommonAction;
+import com.itheima.crm.domain.Customer;
+import com.opensymphony.xwork2.ModelDriven;
+
+/**  
+ * ClassName:SubareaAction <br/>  
+ * Function:  <br/>  
+ * Date:     Nov 4, 2017 4:46:06 PM <br/>       
+ */
+@Controller
+@Scope("prototype")
+@Namespace("/")
+@ParentPackage("struts-default")
+public class SubareaAction extends CommonAction<SubArea> implements ModelDriven<SubArea> {
+
+    /**  
+     * serialVersionUID:TODO(用一句话描述这个变量表示什么).  
+     * @since JDK 1.6  
+     */
+    private static final long serialVersionUID = 1L;
+    
+    
+    @Autowired
+    private SubareaService subareaService;
+    
+    
+    @Action(value="subareaAction_save",results={@Result(name="success",location="/pages/base/sub_area.html",type="redirect")})
+    public String save(){
+        subareaService.save(getModel());
+        return SUCCESS;
+    }
+    
+    private Long fixedId;
+    public void setFixedId(Long fixedId) {
+        this.fixedId = fixedId;
+    }
+         
+    @Action("subArea_findByFixedId")
+    public String findByFixedId() throws Exception{
+        List<SubArea> list  = subareaService.findByFixedId(fixedId);
+        list2json(list,new String[]{"fixedArea","subareas"});
+        return NONE;
+    }
+    
+    @Action(value="subAreaAction_findToColumn")
+    public String findToColumn() throws Exception{
+        List<AreaSub> list = subareaService.findToColumn();
+        list2json(list, null);
+        return NONE;
+    }
+    
+    @Action("subArea_findCustomerByFixedId")
+    public String findCustomerByFixedId() throws Exception{
+        String fixedAreaId = fixedId + "";
+       @SuppressWarnings("unchecked")
+      List<Customer> list =
+               (List<Customer>)WebClient
+                    .create("http://localhost:8888/crm/webservice/customerService/findYiJingGuanLianDingQu")
+                    .type(MediaType.APPLICATION_JSON)
+                    .query("fixedAreaId", fixedAreaId)
+                    .getCollection(Customer.class);
+       
+       list2json(list, null);
+        return NONE;
+    }
+    
+    //分页查询
+    //@RequiresPermissions("subarea_pageQuery")
+    @Action(value="subareaAction_pageQuery",results={@Result(type="redirect")})
+    public String pageQuery() throws Exception{
+        //构造查询条件
+        Specification<SubArea> specification = new Specification<SubArea>() {
+            //参数1：root对象，可以理解为泛型对象
+            //参数2：一般用不到
+            //参数3：cb 构造查询条件
+            @Override
+            public Predicate toPredicate(Root<SubArea> root, CriteriaQuery<?> query,
+                    CriteriaBuilder cb) {
+                String keyWords = getModel().getKeyWords();
+                Area area = getModel().getArea();
+                //FixedArea fixedArea = getModel().getFixedArea();
+                List<Predicate> list = new ArrayList<>();
+                if(StringUtils.isNotEmpty(keyWords)){
+                    Predicate p1 = cb.like(root.get("keyWords").as(String.class), "%"+keyWords+"%");
+                    list.add(p1);
+                }
+               
+                if(area != null && StringUtils.isNotEmpty(area.getProvince())){
+                    Join<Object, Object> join = root.join("area");
+                    Predicate p2 = cb.equal(join.get("province").as(Area.class), area.getProvince());
+                    list.add(p2);
+                }
+                if(area != null && StringUtils.isNotEmpty(area.getCity())){
+                    Join<Object, Object> join = root.join("area");
+                    Predicate p3 = cb.equal(join.get("city").as(Area.class), area.getCity());
+                    list.add(p3);
+                }
+                if(area != null && StringUtils.isNotEmpty(area.getDistrict())){
+                    Join<Object, Object> join = root.join("area");
+                    Predicate p4 = cb.equal(join.get("district").as(Area.class),area.getDistrict());
+                    list.add(p4);
+                }
+                if(list.size() == 0){
+                    return null;
+                }
+                Predicate[] arr = new Predicate[list.size()];
+                list.toArray(arr);
+                return cb.and(arr);
+            }};
+        Pageable pageable = new PageRequest(page-1, rows);
+        Page<SubArea> page = subareaService.pageQuery(specification,pageable);
+        page2json(page, new String[]{"subareas","couriers"});
+        return NONE;
+    }
+    
+    
+    //定区关联分区，查询所有分区
+    @Action(value="subareaAction_findAll")
+    public String findAll() throws Exception{
+        List<SubArea> list = subareaService.findAll();
+        System.out.println(list);
+        list2json(list, new String[]{"subareas","couriers"});
+        return NONE;
+    }
+    
+    
+    //删除分区
+    @Action(value="subareaAction_deleteById",results={@Result(name="success",location="/pages/base/sub_area.html",type="redirect")})
+    public String deleteById(){
+        subareaService.deleteById(getModel().getId());
+        return SUCCESS;
+    }
+   
+    
+
+}
+  

@@ -1,0 +1,4 @@
+driverClass=oracle.jdbc.driver.OracleDriver
+jdbcUrl=jdbc:oracle:thin:@192.168.133.9:1521:orcl
+user=heima20
+password=heima20
